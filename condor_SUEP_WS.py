@@ -45,7 +45,12 @@ elif options.analyzer == "ZH_trackProps":
 elif options.analyzer == "ZH_gen":
   from workflows.SUEP_coffea_ZH_onlygenZpt import * 
   modules_era.append(SUEP_cluster(isMC=options.isMC, era=int(options.era), do_syst=1,  syst_var='', sample=options.dataset, weight_syst='' , flag=False, output_location=out_dir, doOF=False, isDY=options.isDY))
-
+elif options.analyzer == "DY_simple":
+  from workflows.DY_simple import * 
+  modules_era.append(SUEP_cluster(isMC=options.isMC, era=int(options.era), do_syst=1,  syst_var='', sample=options.dataset, weight_syst='' , SRonly=options.SR, output_location=out_dir, doOF=False, isDY=options.isDY)) 
+elif options.analyzer == "DY_simple_ee":
+  from workflows.DY_simple_ee import *
+  modules_era.append(SUEP_cluster(isMC=options.isMC, era=int(options.era), do_syst=1,  syst_var='', sample=options.dataset, weight_syst='' , SRonly=options.SR, output_location=out_dir, doOF=False, isDY=options.isDY))
 
 for instance in modules_era:
     output = run_uproot_job(
