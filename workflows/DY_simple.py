@@ -442,6 +442,7 @@ class SUEP_cluster(processor.ProcessorABC):
         out["puppiMET"]       = self.puppimet.pt[:]
         out["MET_phi"]        = self.met.phi[:]
         out["puppiMET_phi"]   = self.puppimet.phi[:]
+        if self.isMC: out["Pileup_nTrueInt"] = self.events.Pileup.nTrueInt[:]
         return out
 
     def postprocess(self, accumulator):

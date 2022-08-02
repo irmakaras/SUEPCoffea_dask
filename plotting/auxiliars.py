@@ -27,6 +27,16 @@ maxerex = eRECO.GetNbinsX()
 maxerey = eRECO.GetNbinsY()
 
 
+pufile = ROOT.TFile("/eos/user/c/cericeci/Run3/pileupWeights.root", "READ")
+puhisto = pufile.Get("hRatio").Clone("puWeights")
+maxpuid = puhisto.GetNbinsX()
+
+def PU(x):
+  w = np.array([])
+  for i in range(len(x)):
+    w = np.append(w,puhisto.GetBinContent(min(max(1, puhisto.GetXaxis().FindBin(x["Pileup_nTrueInt"][i])), maxpuid)))
+  return w
+
 
 def getSFMu(pt, eta):
   sf  = muID.GetBinContent(min(max(1,muID.GetXaxis().FindBin(abs(eta))),maxmidx), min(max(1,muID.GetYaxis().FindBin(pt)),maxmidy))
