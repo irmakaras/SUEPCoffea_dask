@@ -38,6 +38,17 @@ def PU(x):
   return w
 
 
+pufile_C = ROOT.TFile("/eos/user/c/cericeci/Run3/jsons/pileupWeights_2022C_partial.root", "READ")
+puhisto_C = pufile.Get("hRatio").Clone("puWeights")
+maxpuid_C = puhisto_C.GetNbinsX()
+
+def PU_RunC(x):
+  w = np.array([])
+  for i in range(len(x)):
+    w = np.append(w,puhisto_C.GetBinContent(min(max(1, puhisto_C.GetXaxis().FindBin(x["Pileup_nTrueInt"][i])), maxpuid_C)))
+  return w
+
+
 def getSFMu(pt, eta):
   sf  = muID.GetBinContent(min(max(1,muID.GetXaxis().FindBin(abs(eta))),maxmidx), min(max(1,muID.GetYaxis().FindBin(pt)),maxmidy))
   sf *= muTrk.GetBinContent(min(max(1,muTrk.GetXaxis().FindBin(abs(eta))),maxmtx), min(max(1,muTrk.GetYaxis().FindBin(pt)),maxmty))
