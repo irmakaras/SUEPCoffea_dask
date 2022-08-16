@@ -66,9 +66,9 @@ plots = {
              "vars"     : ["leadjet_pt", "subleadjet_pt", "trailjet_pt"]
   },
 
-"""  "METmore": {
+  "METmore": {
              "name"     : "METmore",
-             "bins"     : ["uniform", 60, 0, 600],
+             "bins"     : ["uniform", 120, 0, 1200],
              "channel"  : "twoleptons",
              "value"    : lambda x, y : (x["MET"], y*cut(x)),
              "logY"     : True,
@@ -84,7 +84,7 @@ plots = {
 
   "puppiMETmore": {
              "name"     : "puppiMETmore",
-             "bins"     : ["uniform", 60, 0, 600],
+             "bins"     : ["uniform", 120, 0, 1200],
              "channel"  : "twoleptons",
              "value"    : lambda x, y : (x["puppiMET"], y*cut(x)),
              "logY"     : True,
@@ -96,7 +96,7 @@ plots = {
              "plotname" : "puppiMETmore",
              "xlabel"   : "p_{T}^{miss, puppi} [GeV]",
              "vars"     : ["leadjet_pt", "subleadjet_pt", "trailjet_pt"]
-  },"""
+  },
 
   "METphi": {
              "name"     : "METphi",
