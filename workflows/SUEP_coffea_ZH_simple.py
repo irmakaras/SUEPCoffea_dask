@@ -22,7 +22,7 @@ from workflows.CMS_corrections.jetmet_utils import apply_jecs
 vector.register_awkward()
 
 class SUEP_cluster(processor.ProcessorABC):
-    def __init__(self, isMC: int, era: int, sample: str,  do_syst: bool, syst_var: str, weight_syst: bool, SRonly: bool, output_location: Optional[str], doOF: Optional[bool], isDY: Optional[bool]) -> None:
+    def __init__(self, isMC: int, era: int, sample: str,  do_syst: bool, syst_var: str, weight_syst: bool, SRonly: bool, output_location: Optional[str], doOF: Optional[bool], isDY: Optional[bool], doTracksGenMatching: Optional[bool]) -> None:
         self.SRonly = SRonly
         self.output_location = output_location
         self.doOF = doOF
@@ -38,7 +38,7 @@ class SUEP_cluster(processor.ProcessorABC):
         self.prefixes = {"SUEP": "SUEP"}
         #Set up for the histograms
         self._accumulator = processor.dict_accumulator({})
-
+        self.doTracksGenMatching = doTracksGenMatching
     @property
     def accumulator(self):
         return self._accumulator
@@ -301,7 +301,8 @@ class SUEP_cluster(processor.ProcessorABC):
             "pt": events.PFCands.trkPt,
             "eta": events.PFCands.trkEta,
             "phi": events.PFCands.trkPhi,
-            "mass": events.PFCands.mass
+            "mass": events.PFCands.mass,
+            "fromSUEP": False,
         }, with_name="Momentum4D")
 
         cutPF = (events.PFCands.fromPV > 1) & \
@@ -319,7 +320,8 @@ class SUEP_cluster(processor.ProcessorABC):
             "pt": events.lostTracks.pt,
             "eta": events.lostTracks.eta,
             "phi": events.lostTracks.phi,
-            "mass": 0.0
+            "mass": 0.0,
+            "fromSUEP": False,
         }, with_name="Momentum4D")
 
         cutLost = (events.lostTracks.fromPV > 1) & \
@@ -333,6 +335,43 @@ class SUEP_cluster(processor.ProcessorABC):
 
         # dimensions of tracks = events x tracks in event x 4 momenta
         totalTracks = ak.concatenate([Cleaned_cands, Lost_Tracks_cands], axis=1)
+        if self.doTracksGenMatching: # Not always activated, as quite time consuming and only needed for specific tests
+          #### SIMTRACKS, for gen matching association ####
+          SimTracks = ak.zip({
+            "pt": events.SimTracks.pt,
+            "eta": events.SimTracks.eta,
+            "phi": events.SimTracks.phi,
+            "mass":  events.SimTracks.mass,
+            "igen": events.SimTracks.igenPart,
+            "fromSUEP": False,
+          }, with_name="Momentum4D")
+          #### SIMTRACK - GENPART Matching (This is done based on geant hit info
+          GenParts  = ak.zip({
+            "pdgId"   : events.GenPart.pdgId,
+            "motherId": events.GenPart.genPartIdxMother,
+            "status"  : events.GenPart.status,
+            "fromSUEP": -1,
+          })
+          while(ak.any(GenParts.fromSUEP < 0)):
+            # To each GenPart assign to a SUEP if it appears on the decay of a SUEP, while loop iterates over the decay chain
+            #print(ak.sum(GenParts.fromSUEP == -4), ak.sum(GenParts.fromSUEP == -3), ak.sum(GenParts.fromSUEP == -1), ak.sum(GenParts.fromSUEP == -0), ak.sum(GenParts.fromSUEP == 1),ak.sum(GenParts.fromSUEP == 2), ak.sum(GenParts.fromSUEP == 3), ak.sum(GenParts.fromSUEP == 4))
+            GenParts.fromSUEP = ak.where((GenParts.motherId == -1) & (GenParts.fromSUEP==-3) ,   3, GenParts.fromSUEP) # UE
+            GenParts.fromSUEP = ak.where((GenParts.motherId == -1) & (GenParts.fromSUEP==-4) ,   4, GenParts.fromSUEP) # ISR
+            GenParts.fromSUEP = ak.where((GenParts.motherId == -1) & (GenParts.fromSUEP==-1) ,   0, GenParts.fromSUEP)    # 0 means matched to PU
+            GenParts.fromSUEP = ak.where(GenParts.pdgId    ==  999998, 1, GenParts.fromSUEP) # 1 means matched to SUEP
+            GenParts.fromSUEP = ak.where(GenParts.pdgId    ==  23    , 2, GenParts.fromSUEP) # 2 means matched to Z
+            GenParts.fromSUEP = ak.where((GenParts.status   ==  63) & (GenParts.fromSUEP < 0)  , -3, GenParts.fromSUEP) # -3 means UE track
+            GenParts.fromSUEP = ak.where((GenParts.status   ==  61) & (GenParts.fromSUEP < 0)  , -4, GenParts.fromSUEP) # -4 means emission from primary but it can still be H/Z so -1 until chain ends
+            GenParts.pdgId    = ak.where(GenParts.fromSUEP < 0, GenParts[GenParts.motherId].pdgId, GenParts.pdgId)
+            GenParts.motherId = ak.where(GenParts.fromSUEP < 0, GenParts[GenParts.motherId].motherId, GenParts.motherId)
+            GenParts.status = ak.where(GenParts.fromSUEP < 0, GenParts[GenParts.motherId].status, GenParts.status)
+            GenParts.fromSUEP = ak.where(GenParts.pdgId    ==  999998, 1, GenParts.fromSUEP)
+          # SimTrack - GenPart association is saved in our customized miniAOD (=>customized nanoAOD) already
+          SimTracks.fromSUEP   = ak.where(SimTracks.igen >= 0, GenParts.fromSUEP[SimTracks.igen] == 1, False)
+          newtotaltracks, newsimtracks = ak.unzip(ak.cartesian([totalTracks, SimTracks], axis=1, nested=True))
+          alldr2 = newtotaltracks.deltaR2(newsimtracks)
+          # SimTrack - RecoTrack association done geometrically, choose closest track within dR < 0.01
+          totalTracks.fromSUEP = ak.where(ak.min(alldr2, axis=2) < 0.01, SimTracks.fromSUEP[ak.argmin(alldr2, axis=2)], False)
 
         # Sorting out the tracks that overlap with leptons
         totalTracks = totalTracks[(totalTracks.deltaR(leptons[:,0])>= 0.4) & (totalTracks.deltaR(leptons[:,1])>= 0.4)]
@@ -341,13 +380,12 @@ class SUEP_cluster(processor.ProcessorABC):
 
     def clusterizeTracks(self, events, tracks):
         # anti-kt, dR=1.5 jets
-        smallEvents = len(events) < 5000
+        smallEvents = len(events) < 5000 # This is a trick so the job reserves enough memory for the clustering step and FastJet doesn't go into overflow
         if not smallEvents:
           jetdef = fastjet.JetDefinition(fastjet.antikt_algorithm, 1.5)        
           cluster = fastjet.ClusterSequence(tracks, jetdef)
           ak15_jets   = ak.with_name(cluster.inclusive_jets(min_pt=0),"Momentum4D") # These are the ak15_jets
           ak15_consts = ak.with_name(cluster.constituents(min_pt=0),"Momentum4D")   # And these are the collections of constituents of the ak15_jets
-          return events, ak15_jets, ak15_consts
         else: #With few events/file the thing crashes because of FastJet so we are going to create "fake" events
           ncopies     = round(5000/(len(events)))
           oldtracks   = tracks
@@ -358,14 +396,40 @@ class SUEP_cluster(processor.ProcessorABC):
           ak15_jets   = ak.with_name(cluster.inclusive_jets(min_pt=0),"Momentum4D") # These are the ak15_jets
           ak15_consts = ak.with_name(cluster.constituents(min_pt=0),"Momentum4D")   # And these are the collections of constituents of the ak15_jets
           # But now we have to delete the repeated set of events
-          return events, ak15_jets[:len(oldtracks)], ak15_consts[:len(oldtracks)]
+          ak15_jets = ak15_jets[:len(oldtracks)]
+          ak15_consts = ak15_consts[:len(oldtracks)]
+          tracks = tracks[:len(oldtracks)]
+        # Now recast the constituents back again so we can read the info of fromSUEP from the original tracks, as tagging is lost in fastJet
+        ak15_consts = ak.zip({
+            "pt": ak15_consts.pt,
+            "eta": ak15_consts.eta,
+            "phi": ak15_consts.phi,
+            "mass":  ak15_consts.mass,
+            "fromSUEP": False,
+        }, with_name="Momentum4D")
+        if self.doTracksGenMatching:
+          # This one is complicated
+          # First, get the constituents into a matrix
+          # Save the shape for later
+          shape = ak.num(ak15_consts, axis=2)
+          # Flatten the constituents on the 2nd dimension (constituents axis)
+          ak15_consts = ak.flatten(ak15_consts, axis=2)
+          # Make all possible dR pairs to find the closest track to a constituent
+          newak15_consts, newtracks = ak.unzip(ak.cartesian([ak15_consts, tracks], axis=1, nested=True))
+          alldr2 = newak15_consts.deltaR2(newtracks)
+          ak15_consts.fromSUEP = ak.where(ak.min(alldr2, axis=2) < 0.01, tracks.fromSUEP[ak.argmin(alldr2, axis=2)], False) # I.e. if dR(track, constituent) < 0.01 for at least one track, constituent inherits tagging of the closest track
+          # And then we recast it to the proper size with this thing
+          ak15_consts = ak.unflatten(ak15_consts, ak.flatten(shape), axis=1)
+
+        return events, ak15_jets, ak15_consts
+
 
     def striptizeTracks(self, events, tracks, etaWidth=0.75):
-        etaCenters = np.linspace(-2.5, 2.5, 50) # Scan 50 eta values
+        etaCenters = np.linspace(-2.5, 2.5, 50) # Scan 50 eta values, so 0.1 resolution
         tracksinBand = tracks
         nInBand      = ak.num(tracks) * -1 # So we always get towards better stuff
+        
         for etaC in etaCenters:
-            #print("Striptizing... %1.1f/%1.1f"%(etaC,etaWidth))
             cutInBand    = (tracks.eta >= (etaC - etaWidth)) & (tracks.eta < (etaC + etaWidth))
             trackstest   = tracks[cutInBand]
             ntest        = ak.num(trackstest)
@@ -431,7 +495,7 @@ class SUEP_cluster(processor.ProcessorABC):
 
 
     def process(self, events):
-        np.random.seed(max(0,min(events.event[0], 2**31))) # This ensures reproducibility of results (i.e. for the random track dropping), while also getting different random numbers per file to avoid biases (like always dropping the first track, etc.
+        np.random.seed(max(0,min(events.event[0], 2**31))) # This ensures reproducibility of results (i.e. for the random track dropping), while also getting different random numbers per file to avoid biases (like always dropping the first track, etc.)
         debug    = True  # If we want some prints in the middle
         self.chunkTag = "out_%i_%i_%i.hdf5"%(events.event[0], events.luminosityBlock[0], events.run[0]) #Unique tag to get different outputs per tag
         fullFile = self.output_location + "/" + self.chunkTag
@@ -495,18 +559,19 @@ class SUEP_cluster(processor.ProcessorABC):
         if debug: print("%i events pass jet cuts. Selecting tracks..."%len(self.events))
         
         if self.doTracks:
-            # Right now no track cuts, only selecting tracks
+            # Right now no per event track cuts, only selecting tracks
             self.events, self.tracks = self.selectByTracks(self.events, self.leptons)[:2] # Again, we need leptons to clean the tracks
             if not(self.shouldContinueAfterCut(self.events, outputs)): return accumulator
             if debug: print("%i events pass track cuts. Doing track clustering..."%len(self.events))
             if self.doClusters:
+                # This is the ak15 clustering step
                 self.events, self.clusters, self.constituents  = self.clusterizeTracks(self.events, self.tracks)[:3]
                 highpt_clusters = ak.argsort(self.clusters.pt, axis=1, ascending=False, stable=True)
                 self.clusters   = self.clusters[highpt_clusters]
                 self.constituents = self.constituents[highpt_clusters]
 
         if self.doGen:
-            print("Do gen!")
+            if debug: print("Do gen!")
             if self.isDY: self.events, self.Zpt = self.selectByGEN(self.events)[:2]
             else: self.events, self.genZ, self.genH, self.genSUEP = self.selectByGEN(self.events)[:4]
             if not(self.shouldContinueAfterCut(self.events, outputs)): return accumulator
@@ -515,26 +580,26 @@ class SUEP_cluster(processor.ProcessorABC):
         ##### Finally, build additional composite objects
         # First the Z candidates
         self.Zcands = self.leptons[:,0] + self.leptons[:,1]
-        print("Now build systematics and weights")
+        if debug: print("Now build systematics and weights")
         if self.isMC:
           self.btagweights = self.doBTagWeights(self.events, self.jets, "L") # Does not change selection 
-          self.puweights   = self.doPUWeights(self.events)                                   # Does not change selection
+          self.puweights   = self.doPUWeights(self.events)                   # Does not change selection
           self.l1preweights= self.doPrefireWeights(self.events)
 
         # ------------------------------------------------------------------------------
         # ------------------------------- UNCERTAINTIES --------------------------------
         # ------------------------------------------------------------------------------
-        self.jetsVar   = {"": self.jets} # If not activated, always central jet collection
+        self.jetsVar   = {"": self.jets}   # If not activated, always central jet collection
         self.tracksVar = {"": self.tracks} # If not activated, always central jet collection
 
-        self.varsToDo = [""]           # If not activated just do nominal yields
+        self.varsToDo = [""]               # If not activated just do nominal yields
         if self.do_syst:
-          self.isrweights  = self.doISRWeights(self.events)                                  # Does not change selection
+          self.isrweights  = self.doISRWeights(self.events)                                    # Does not change selection
           if self.isSignal: 
             self.jetsVar     = self.doJECJERVariations(self.events, self.jets)                 # Does change selection, entry "" is central jets, entry "JECX" is JECUp/JECDown, entry "JERX" is JERUp/JerDown
 
           if self.doTracks: 
-            print("Start Tracks!")
+            if debug: print("Start Tracks!")
             self.tracksVar = self.doTracksDropping(self.events, self.tracks) # Does change selection, entry "" is central, "TRACKUP" is tracks modified
           outputsnew = {}
           for channel in outputs:
