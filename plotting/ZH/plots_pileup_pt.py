@@ -19,10 +19,7 @@ plots = {
              "xlabel"   : "N_{tracks}",
              "vars"     : ["ntracks"]
   },
-    
-
-    
-      "njets": {
+  "njets": {
              "name"     : "njets",
              "bins"     : ["uniform", 15, 0, 20],
              "channel"  : "onecluster",
@@ -37,8 +34,7 @@ plots = {
              "xlabel"   : "N_{jets}",
              "vars"     : ["njets"]
   },
-  
-      "HT": {
+  "HT": {
              "name"     : "HT",
              "bins"     : ["uniform", 15, 0, 500],
              "channel"  : "onecluster",
@@ -68,8 +64,7 @@ plots = {
              "xlabel"   : "N_{tracks}^{SUEP}",
              "vars"     : ["leadcluster_ntracks"]
   },
-    
-      "jet1pt": {
+  "jet1pt": {
              "name"     : "jet1pt",
              "bins"     : ["uniform", 20, 0, 200],
              "channel"  : "onecluster",
@@ -84,8 +79,6 @@ plots = {
              "xlabel"   : "p_{T}^{jet1}",
              "vars"     : ["leadjet_pt"]
   },
-    
-    
   "leadclusterpt": {
              "name"     : "leadclusterpt",
              "bins"     : ["uniform", 15, 0, 200],
@@ -101,7 +94,7 @@ plots = {
              "xlabel"   : "p_{T}^{SUEP} [GeV]",
              "vars"     : ["leadcluster_pt"]
   },
-      "Zpt": {
+  "Zpt": {
              "name"     : "Zpt",
              "bins"     : ["uniform", 10, 0, 200],
              "channel"  : "onecluster",
@@ -116,7 +109,7 @@ plots = {
              "xlabel"   : "p_{T}^{Z} [GeV]",
              "vars"     : ["Z_pt"]
   },
-      "Zphi": {
+  "Zphi": {
              "name"     : "Zphi",
              "bins"     : ["uniform", 10, -3.14, 3.14],
              "channel"  : "twoleptons",
@@ -131,7 +124,7 @@ plots = {
              "xlabel"   : "#phi^{Z}",
              "vars"     : ["Z_phi"]
   },
-      "Zeta": {
+  "Zeta": {
              "name"     : "Zeta",
              "bins"     : ["uniform", 10, -5, 5],
              "channel"  : "twoleptons",
@@ -146,8 +139,7 @@ plots = {
              "xlabel"   : "#eta^{Z}",
              "vars"     : ["Z_eta"]
   },
-   
-      "leadclusterspher": {
+  "leadclusterspher": {
              "name"     : "leadclusterspher",
              "bins"     : ["uniform", 10, 0, 1],
              "channel"  : "onecluster",
@@ -162,7 +154,7 @@ plots = {
              "xlabel"   : "S^{SUEP}",
              "vars"     : ["leadclusterSpher_C"]
   },
-      "leadclusterspherlab": {
+  "leadclusterspherlab": {
              "name"     : "leadclusterspherlab",
              "bins"     : ["uniform", 10, 0, 1],
              "channel"  : "onecluster",
